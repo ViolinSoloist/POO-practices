@@ -1,3 +1,5 @@
+/// @author Erik Min Soo Chung
+
 #include <iostream>
 #include <string>
 #include <memory>
@@ -15,6 +17,10 @@ typedef struct data_ {
 
 enum estadoCivil {SOLTEIRO, CASADO, SEPARADO, DIVORCIADO, VIUVO};
 
+/**
+ * @brief Classe mãe, Contatos podem ser de Pessoas físicas ou Pessoas jurídicas
+ *
+ */
 class Contato {
 protected:
     string documento;
@@ -31,10 +37,11 @@ public:
         this->email = email;
     }
 
-    virtual ~Contato() {} // destrutor
+    virtual ~Contato() {}
 
     // getters
-    virtual string getDocumento() = 0;
+    virtual string getDocumento() = 0; // implementado especificamente para formatação específica do documento
+    string getRawDocumento() {return this->documento;}
     string getNome() {return this->nome;}
     string getEndereco() {return this->endereco;}
     string getEmail() {return this->email;}
@@ -54,7 +61,9 @@ public:
 
     ~PessoaFisica() {}
 
-    // getters (getData() é uma gororoba mas funciona e cabe em uma linha então é isso)
+    // -------- GETTERS -----------------
+
+    // retorna o documento formatado, ex: "123.456.789-01"
     string getDocumento() override {
         string str_cpf = "";
         if(this->documento.length() != 11) return this->documento;
@@ -66,7 +75,10 @@ public:
         }
         return str_cpf;
     }
+
+    // retorna a data de aniversario formatado, ex: 01/02/2026
     string getData() {return to_string(nascimento.dia).append("/").append(to_string(nascimento.mes)).append("/").append(to_string(nascimento.ano));}
+    // retorna o estado civil no tipo enum (int)
     estadoCivil getEstadoCivil() {return this->estado_civil;}
 };
 
@@ -84,7 +96,9 @@ public:
 
     ~PessoaJuridica() {}
 
-    // getters
+    // ---------- GETTERS --------------
+
+    // retorna o CNPJ formatado, ex: "-12.345.678/0001-99"
     string getDocumento() override {
         string str_cnpj = "";
         if(this->documento.length() != 14) return this->documento;
@@ -102,15 +116,15 @@ public:
 };
 
 // ------------------------------------------------------
-// interface para o usuário das funcionalidades da agenda
+// Interface para o usuário das funcionalidades da agenda
 // ------------------------------------------------------
 class IAgenda {
 public:
     virtual bool agendaVazia() = 0;
     virtual int agendaSize() = 0;
     virtual void addContato(up<Contato> c) = 0;
-    virtual void removerContato(string termo) = 0;
-    virtual void pesquisarContato(string termo) = 0;
+    virtual void removerContato(string termo) = 0; // Remocao por nome ou documento
+    virtual void pesquisarContato(string termo) = 0; // Pesquisa por nome ou documento
     virtual void visualizarContatos() = 0;
     // Pessoas Físicas aparecem antes das Pessoas Jurídicas. A ordenação é por CPF/CNPJ
     virtual void ordenarContatos() = 0;
@@ -122,7 +136,7 @@ class Agenda : public IAgenda {
 private:
     vector<up<Contato>> lista_contatos;
 
-    // usado apenas no Algoritmo de Ordenacao. Fins didáticos, no código abaixo será usado a função nativa do C++.
+    // usado apenas no Algoritmo de Ordenacao. Fins didáticos, no código abaixo será usado a função swap() nativa do C++.
     void swapContatos(up<Contato>& c1, up<Contato>& c2) {
         up<Contato> temp;
         temp = move(c1);
@@ -130,28 +144,54 @@ private:
         c2 = move(temp);
     }
 
-    void makeHeapContatos(int n) {  
-        if (n<=0) return;
-        // loop que itera por todos os nós pais
-        for (int i=n/2 ; i>=0 ; i--) {
-            int l = 2*i + 1;
-            int r = 2*i + 2;
-            
-            string pai = lista_contatos[i]->getDocumento();
+    /**
+     * @brief compara de @param c1 > @param c2 , em outras palavras, se c2 deve vir antes de c1 na ordenacao.
+     * Pessoa física (CPF de tamanho 11) é considerado "menor" que Pessoa Juridica (CNPJ de tamanho 14),
+     * ou seja, aquela vem antes desta.
+     * 
+     * @return true se c1 > c2 (se c2 vem antes de c1 quando ordenado)
+     * @return false se for ao contrário.
+     */
+    bool isMaior(Contato* c1, Contato* c2) {
+        string doc1 = c1->getRawDocumento();
+        string doc2 = c2->getRawDocumento();
 
-            // Como CPF (Pessoa Física) tem menos dígitos que CNPJ (Pessoa Jurídica),
-            // ordenação lexicográfica automaticamente deixa Física na frente de Jurídica.
-            if (l < n && pai.compare(lista_contatos[l]->getDocumento()) > 0) swap(lista_contatos[i], lista_contatos[l]);
-            if (r < n && pai.compare(lista_contatos[r]->getDocumento()) > 0) swap(lista_contatos[i], lista_contatos[r]);
+        // CPF (tam 11) vem antes de CNPJ (tam 14)
+        if (doc1.length() != doc2.length()) {return doc1.length() > doc2.length();}
+        
+        // se for o mesmo tamanho (logo, o mesmo tipo), compara lexicograficamente
+        return doc1.compare(doc2) > 0;
+    }
+
+    // recursivamente pega um elemento de um vetor e faz trocas com seus filhos
+    // se necessário para manter a relação pai > filho1, filho2 de um elemento de uma heap.
+    void heapfy(int tam, int i) {
+        int maior = i;
+        int l = 2*i + 1;
+        int r = 2*i + 2;
+
+        if (l < tam && isMaior(lista_contatos[l].get(), lista_contatos[maior].get()))
+            maior = l;
+
+        if (r < tam && isMaior(lista_contatos[r].get(), lista_contatos[maior].get()))
+            maior = r;
+
+        if (maior != i) { // se maior for direrente de i, quer dizer que o maior agora é um dos filhos
+            swap(lista_contatos[maior], lista_contatos[i]);
+            heapfy(tam, maior);
         }
     }
 
-    // considera que o vetor (tamanho n) a ser ordenado já está em heap
+    // pega um vetor comparável e transforma numa heap, usando  heapfy
+    void makeHeapContatos() {for(int i=agendaSize()/2 - 1 ; i>=0 ; i--) heapfy(agendaSize(), i);}
+
+    // assume que o vetor já está orginalmente em heap para ordenar usando HeapSort
     void heapSort(int n) {
-        if (n < 2) return;
-        swap(lista_contatos[0], lista_contatos[n-1]);
-        makeHeapContatos(n-1);
-        heapSort(n-1);
+        if (n<2) return;
+        // logo, no início dessa função, o início do vetor já é o maior e deve ser trocando com o último.
+        swap(lista_contatos[0], lista_contatos[n-1]); 
+        heapfy(n-1, 0); //organizamos a árvore reduzida, pelo início, que agora tem um valor menor.
+        heapSort(n-1);       
     }
 
 public:
@@ -180,6 +220,7 @@ public:
         cout << "Erro: Contato '" << termo << "' não encontrado para remover!" << endl;
     }
 
+    // pesquisa é por nome ou documento
     void pesquisarContato(string termo) override {
         for (auto& contato : lista_contatos) {
             if (contato->getDocumento() == termo || contato->getNome() == termo) {
@@ -201,7 +242,7 @@ public:
         if (agendaVazia()) {cout << "Aviso: A agenda está vazia." << endl; return;}
         if (agendaSize() == 1) return;
 
-        makeHeapContatos(agendaSize());
+        makeHeapContatos();
         heapSort(agendaSize());
     }
     
@@ -209,23 +250,20 @@ public:
 
 int main() {
     Agenda minhaAgenda;
-
-    // Criando dados de exemplo
     Data dataNasc = {15, 8, 1990};
     
-    minhaAgenda.addContato(make_unique<PessoaFisica>("12345678901", "Ana Silva", "Rua A", dataNasc, "ana@email.com", SOLTEIRO));
-    minhaAgenda.addContato(make_unique<PessoaJuridica>("12345678000199", "Tech Solutions", "Rua B", "contato@tech.com", "12345", "Tech Solutions Ltda"));
+    minhaAgenda.addContato(make_unique<PessoaJuridica>("99999999000199", "Z Tech", "Rua C", "z@email.com", "999", "Z Ltda"));
+    minhaAgenda.addContato(make_unique<PessoaFisica>("99999999999", "Bruno", "Rua B", dataNasc, "bruno@email.com", SOLTEIRO));
+    minhaAgenda.addContato(make_unique<PessoaJuridica>("12345678000199", "A Solutions", "Rua A", "a@email.com", "123", "A Ltda"));
+    minhaAgenda.addContato(make_unique<PessoaFisica>("12345678901", "Ana", "Rua A", dataNasc, "ana@email.com", SOLTEIRO));
 
-    // Visualizar
+    cout << "\n--- ANTES DA ORDENACAO ---";
     minhaAgenda.visualizarContatos();
-
-    // Pesquisar
-    minhaAgenda.pesquisarContato("Ana Silva");
-
-    // Remover
-    minhaAgenda.removerContato("Ana Silva");
     
-    // Visualizar novamente para confirmar remoção
+    // teste de ordenação
+    minhaAgenda.ordenarContatos();
+
+    cout << "\n--- DEPOIS DA ORDENACAO ---";
     minhaAgenda.visualizarContatos();
 
     return 0;
