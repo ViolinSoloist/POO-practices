@@ -11,7 +11,7 @@ typedef struct data_ {
     int dia;
     int mes;
     int ano;
-}data;
+}Data;
 
 enum estadoCivil {SOLTEIRO, CASADO, SEPARADO, DIVORCIADO, VIUVO};
 
@@ -42,11 +42,11 @@ public:
 
 class PessoaFisica : public Contato {
 private:
-    data nascimento;
+    Data nascimento;
     estadoCivil estado_civil;
 
 public:
-    PessoaFisica(string cpf, string nome, string endereco, data nascimento, string email, estadoCivil estado_civil) 
+    PessoaFisica(string cpf, string nome, string endereco, Data nascimento, string email, estadoCivil estado_civil) 
     : Contato(cpf, nome, endereco, email) {
         this->nascimento = nascimento;
         this->estado_civil = estado_civil;
@@ -163,12 +163,9 @@ int main() {
     Agenda minhaAgenda;
 
     // Criando dados de exemplo
-    data dataNasc = {15, 8, 1990};
+    Data dataNasc = {15, 8, 1990};
     
-    // Adicionando Pessoa Física
     minhaAgenda.addContato(make_unique<PessoaFisica>("12345678901", "Ana Silva", "Rua A", dataNasc, "ana@email.com", SOLTEIRO));
-    
-    // Adicionando Pessoa Jurídica
     minhaAgenda.addContato(make_unique<PessoaJuridica>("12345678000199", "Tech Solutions", "Rua B", "contato@tech.com", "12345", "Tech Solutions Ltda"));
 
     // Visualizar
