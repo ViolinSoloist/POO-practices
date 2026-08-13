@@ -101,15 +101,19 @@ public:
     string getRazaoSocial() {return this->razao_social;}
 };
 
-// ---------------------------------------------------
-// todas as ações possíveis de se fazer na agenda
-// ---------------------------------------------------
+// ------------------------------------------------------
+// interface para o usuário das funcionalidades da agenda
+// ------------------------------------------------------
 class IAgenda {
 public:
+    virtual bool agendaVazia() = 0;
+    virtual int agendaSize() = 0;
     virtual void addContato(up<Contato> c) = 0;
     virtual void removerContato(string termo) = 0;
     virtual void pesquisarContato(string termo) = 0;
     virtual void visualizarContatos() = 0;
+    // Pessoas Físicas aparecem antes das Pessoas Jurídicas. A ordenação é por CPF/CNPJ
+    virtual void ordenarContatos() = 0;
 
     virtual ~IAgenda() {}
 };
@@ -117,12 +121,48 @@ public:
 class Agenda : public IAgenda {
 private:
     vector<up<Contato>> lista_contatos;
+
+    // usado apenas no Algoritmo de Ordenacao. Fins didáticos, no código abaixo será usado a função nativa do C++.
+    void swapContatos(up<Contato>& c1, up<Contato>& c2) {
+        up<Contato> temp;
+        temp = move(c1);
+        c1 = move(c2);
+        c2 = move(temp);
+    }
+
+    void makeHeapContatos(int n) {  
+        if (n<=0) return;
+        // loop que itera por todos os nós pais
+        for (int i=n/2 ; i>=0 ; i--) {
+            int l = 2*i + 1;
+            int r = 2*i + 2;
+            
+            string pai = lista_contatos[i]->getDocumento();
+
+            // Como CPF (Pessoa Física) tem menos dígitos que CNPJ (Pessoa Jurídica),
+            // ordenação lexicográfica automaticamente deixa Física na frente de Jurídica.
+            if (l < n && pai.compare(lista_contatos[l]->getDocumento()) > 0) swap(lista_contatos[i], lista_contatos[l]);
+            if (r < n && pai.compare(lista_contatos[r]->getDocumento()) > 0) swap(lista_contatos[i], lista_contatos[r]);
+        }
+    }
+
+    // considera que o vetor (tamanho n) a ser ordenado já está em heap
+    void heapSort(int n) {
+        if (n < 2) return;
+        swap(lista_contatos[0], lista_contatos[n-1]);
+        makeHeapContatos(n-1);
+        heapSort(n-1);
+    }
+
 public:
     Agenda() {
         lista_contatos.clear();
     }
 
     ~Agenda() {}
+
+    int agendaSize() override {return lista_contatos.size();}
+    bool agendaVazia() override {return (agendaSize() == 0 ? true : false);}
 
     void addContato(up<Contato> c) override {
         lista_contatos.push_back(move(c));
@@ -155,6 +195,14 @@ public:
         for (auto& contato : lista_contatos) {
             cout << "Nome: " << contato->getNome() << ", Documento: " << contato->getDocumento() << endl;
         }
+    }
+
+    void ordenarContatos() override { // usa HeapSort
+        if (agendaVazia()) {cout << "Aviso: A agenda está vazia." << endl; return;}
+        if (agendaSize() == 1) return;
+
+        makeHeapContatos(agendaSize());
+        heapSort(agendaSize());
     }
     
 };
