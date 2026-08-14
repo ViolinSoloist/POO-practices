@@ -1,3 +1,5 @@
+/// @author Erik Min Soo Chung
+
 #include <iostream>
 #include <map>
 #include <vector>
@@ -13,7 +15,7 @@ map<Produto, int> m;
 
 
 /// @brief @class mãe. Produtos podem ser @class Livros, @class CDs e @class DVDs, fazendo parte das categorias Leitura e Midia.
-// Todos eles têm nome, preco e código de barras único (passados no construtor).
+/// Todos eles têm nome, preco e código de barras único (passados no construtor).
 class Produto {
 protected:
     string nome;
@@ -82,14 +84,16 @@ public:
 
     /// @brief MÉTODOS
     
-    // verificadores
+    // ============ verificadores ====================
     int getSize() {return catalogo.size();}
     bool isEmpty() {return getSize() == 0;}
     bool isFull() {return getSize() >= MAX_TOTAL;}
     
-    // funcionalidades e procedimentos/métodos da loja 
+    // =========== funcionalidades e procedimentos/métodos da loja  =================
 
-    /// @brief @returns true e o produto se acha correspondência e false e um ponteiro nulo se acontecer o oposto
+    /// @return "true" e o produto, se acha correspondência, e "false" e um ponteiro nulo, se acontecer o oposto.
+    /// @attention Busca apenas por código, não pelo nome. Justifica-se pelo fato de alguns comércios optarem por não usar o nome
+    // por questões de incerteza e praticidade e clareza de usar apenas códigos únicos.
     Pbp buscaProduto(int codigo) {
         Pbp p = {false, NULL};
         if (isEmpty()) return p;
@@ -105,32 +109,48 @@ public:
     bool removeProduto(int codigo) {
         Pbp res = buscaProduto(codigo);
         if (!res.first) {return false;}
-        catalogo.erase(remove(catalogo.begin(), catalogo.end(), res.second), catalogo.end());
+        
+        /** @anchor O(2n)
+         * @details itera novamente pelo vetor (essa função itera 2 vezes no total por catálogo)
+         * Como continua sendo O(n) e n não tende a tamanhos grandes, o código tem dupla iteração
+         * para reaproveitamento de código */
+        for (auto it = catalogo.begin(); it != catalogo.end(); ++it) {
+            if (it->get() == res.second) {
+                catalogo.erase(it);
+                break;
+            }
+        }
         return res.first;
     }
 
+    /// solução @ref O(2n) 
     bool vendeProduto(int codigo) {
         Pbp res = buscaProduto(codigo);
         if (!res.first) {return false;}
 
         ganhos += res.second->getPreco();
-        removeProduto(codigo); // solução O (2n)
+        removeProduto(codigo); 
     }
 
-    // Procedimento de feedbacks (Checagem das funções via terminal)
+    // ============== Procedimento de feedbacks (Checagem das funções via terminal) ===================
     void printBuscaProduto(int codigo) {
         Pbp res = buscaProduto(codigo);
 
-        if (!res.first) {cout << "Produto não encontrado." << endl << endl; return;}
+        if (!res.first) {cout << "Produto de código" << codigo << " não encontrado." << endl << endl; return;}
 
-        cout << "Produto encontrado:" << endl << endl;
+        cout << "Produto de código " << codigo << " encontrado:" << endl << endl;
         cout << "Nome: " << res.second->getNome() << endl << "Preco: R$" << res.second->getPreco() << endl
             << "Categoria: " << res.second->getCategoria() << endl << "Produto: " << res.second->getTipo() << endl << endl;
     }
 
     void printRemoveProduto(int codigo) {
-        if (removeProduto(codigo)) cout << "Produto removido com sucesso." << endl;
-        else cout << "Falha na remocao: produto não encontrado." << endl;
+        if (removeProduto(codigo)) cout << "Produto de código " << codigo <<" removido com sucesso." << endl;
+        else cout << "Falha na remocao: produto de código " << codigo << " não encontrado." << endl;
+    }
+
+    void printVendeProduto(int codigo) {
+        if (vendeProduto(codigo)) cout << "Produto de código " << codigo << " vendido com sucesso." << endl;
+        else cout << "Falha na venda: produto de código " << codigo << " não encontrado." << endl;
     }
 
 };
