@@ -14,8 +14,8 @@ enum categoria_ {LEITURA, MIDIA};
 map<Produto, int> m;
 
 
-/// @brief @class mãe. Produtos podem ser @class Livros, @class CDs e @class DVDs, fazendo parte das categorias Leitura e Midia.
-/// Todos eles têm nome, preco e código de barras único (passados no construtor).
+/// @brief Classe a ser herdada. Produtos podem ser Livros, CDs e DVDs, fazendo parte das categorias Leitura e Midia.
+/// Todos eles têm nome, preco e código de barras único para o tipo de produto, (passados no construtor).
 class Produto {
 protected:
     string nome;
@@ -73,9 +73,10 @@ public:
 /// @brief @class principal Loja, responsável por armazenar (num vetor) e gerenciar @class Produtos 
 class Loja {
 private:
+    /// @brief Catálogo que contém todos os (ponteiros para) produtos da loja, com capacidade limitada.
+    /// @details Vetor de ponteiros únicos para Classe de Produtos.
     vector<unique_ptr<Produto>> catalogo;
     float ganhos; // Quanto, em reais, a loja vendeu
-    static const int MAX_PRODUTO = 30; // supondo que há um limite na quantidade de um mesmo produto
     static const int MAX_TOTAL = 100; // supondo que a loja tem uma capacidade máxima total
 
 public:
@@ -103,6 +104,17 @@ public:
             if (pd->getCodigo() == codigo) p = {true, pd};
         }
         return p;
+    }
+
+    /// @brief Adiciona um Produto ao catálogo da loja.
+    /// @param pd_ptr Ponteiro único para classe Produto.
+    /// @return Falso se o catálogo já está cheio ou se já há um produto com o mesmo código (códigos devem ser únicos).
+    bool adicionarProduto(unique_ptr<Produto> pd_ptr) {
+        if (isFull()) return false;
+        if (buscaProduto(pd_ptr->getCodigo()).first) return false;
+
+        catalogo.push_back(move(pd_ptr));
+        return true;
     }
 
     /// @extends buscaProduto()
@@ -151,6 +163,16 @@ public:
     void printVendeProduto(int codigo) {
         if (vendeProduto(codigo)) cout << "Produto de código " << codigo << " vendido com sucesso." << endl;
         else cout << "Falha na venda: produto de código " << codigo << " não encontrado." << endl;
+    }
+
+    void printAdicionarProduto(unique_ptr<Produto> pd) {
+        bool added = adicionarProduto(move(pd));
+        if (!added) cout << "Erro ao adicionar produto: Catálogo cheio ou código já existe." << endl;
+        else cout << "Produto adicionado com sucesso." << endl;
+    }
+
+    void listarProdutos() {
+
     }
 
 };
