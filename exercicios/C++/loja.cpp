@@ -1,28 +1,23 @@
-/// @author Erik Min Soo Chung
-
 #include <iostream>
 #include <map>
 #include <vector>
 #include <memory>
+#include <stdexcept>
 
 using namespace std;
 
 #define Pbp pair<bool, Produto*>
 
-enum tipo_ {LIVRO, CD, DVD};
-enum categoria_ {LEITURA, MIDIA};
-map<Produto, int> m;
-
+enum TipoProduto {LIVRO, CD, DVD};
+enum Categoria {LEITURA, MIDIA};
 
 /// @brief Classe a ser herdada. Produtos podem ser Livros, CDs e DVDs, fazendo parte das categorias Leitura e Midia.
-/// Todos eles têm nome, preco e código de barras único para o tipo de produto, (passados no construtor).
+/// Todos eles têm nome, preço e código de barras único para o tipo de produto, (passados no construtor).
 class Produto {
 protected:
     string nome;
     float preco;
     int codigo_barras;
-    int tipo;
-    int categoria;
 
 public:
     Produto(string nome, float preco, int codigo) {
@@ -35,150 +30,192 @@ public:
     string getNome() {return this->nome;}
     float getPreco() {return this->preco;}
     int getCodigo() {return this->codigo_barras;}
-    virtual int getTipo() = 0;
-    virtual int getCategoria() = 0;
+    
+    // Funções virtuais puras
+    virtual TipoProduto getTipo() = 0;
+    virtual Categoria getCategoria() = 0;
+    virtual string getNomeCategoria() = 0;
 };
 
 class Livro : public Produto {
 public:
-    Livro(string nome, float preco, int codigo) : Produto(nome, preco, codigo) {
-        tipo = LIVRO;
-        categoria = LEITURA;
-    }
+    Livro(string nome, float preco, int codigo) : Produto(nome, preco, codigo) {}
     ~Livro() {}
 
-    int getTipo() {return tipo;}
-    int getCategoria() {return categoria;}
+    TipoProduto getTipo() override {return LIVRO;}
+    Categoria getCategoria() override {return LEITURA;}
+    string getNomeCategoria() override {return "Leitura";}
 };
 
 class Cd : public Produto {
 public:
-    Cd(string nome, float preco, int codigo) : Produto(nome, preco, codigo) {
-        tipo = CD;
-        categoria = MIDIA;
-    }
+    Cd(string nome, float preco, int codigo) : Produto(nome, preco, codigo) {}
     virtual ~Cd() {}
 
-    int getTipo() {return tipo;}
-    int getCategoria() {return categoria;}
+    TipoProduto getTipo() override {return CD;}
+    Categoria getCategoria() override {return MIDIA;}
+    string getNomeCategoria() override {return "Midia (CD)";}
 };
 
 class Dvd : public Cd {
 public:
-    Dvd(string nome, float preco, int codigo) : Cd(nome, preco, codigo) {tipo = DVD;}
+    Dvd(string nome, float preco, int codigo) : Cd(nome, preco, codigo) {}
     ~Dvd() {}
+
+    TipoProduto getTipo() override {return DVD;}
+    Categoria getCategoria() override {return MIDIA;}
+    string getNomeCategoria() override {return "Midia (DVD)";}
 };
 
-// -----------------------------------------------------------------------------------------------
-/// @brief @class principal Loja, responsável por armazenar (num vetor) e gerenciar @class Produtos 
-class Loja {
+// -------------------------------- Loja ---------------------------------------------------
+
+
+/// @brief Estrutura (pair) auxiliar para guardar o produto e a sua quantidade no stock
+struct ItemEstoque {
+    unique_ptr<Produto> produto;
+    int quantidade;
+};
+
+/// @brief Interface para o usuário sobre as funcionalidades públicas da Loja.
+class InterfaceLoja {
+public:
+    ~InterfaceLoja(){}
+
+    /// @brief Procura um produto por código. Retorna um ponteiro bruto (nullptr se não encontrar).
+    virtual Produto* buscarPorCodigo(int codigo) = 0;
+    /// @brief O mesmo princípio da busca por código, mas pesquisa por nome.
+    virtual Produto* buscarPorNome(string nome) = 0;
+
+    /// @brief Adiciona um novo produto ao catálogo com uma quantidade inicial.
+    virtual void adicionarProduto(unique_ptr<Produto> pd, int quantidade) = 0;
+
+    /// @brief Vende uma unidade do produto, se houver stock
+    virtual void venderProduto(int codigo) = 0;
+
+    /// @brief Mostra todo o catálogo, a quantidade de cada um, e faz a soma por categoria
+    virtual void relatorioEstoque() = 0;
+};
+/// @anchor Interface
+
+/// @brief Classe principal Loja, responsável por armazenar (num vetor) e gerenciar Produtos 
+class Loja : public InterfaceLoja {
 private:
-    /// @brief Catálogo que contém todos os (ponteiros para) produtos da loja, com capacidade limitada.
-    /// @details Vetor de ponteiros únicos para Classe de Produtos.
-    vector<unique_ptr<Produto>> catalogo;
-    float ganhos; // Quanto, em reais, a loja vendeu
-    static const int MAX_TOTAL = 100; // supondo que a loja tem uma capacidade máxima total
+    vector<ItemEstoque> estoque;
+    float ganhos = 0.0; // Quanto, em reais, a loja vendeu
+
+    /// @returns Ponteiro para a estrutura ItemEstoque, se tiver correspondência.
+    ItemEstoque* buscarItemEstoque(int codigo) {
+        for (auto& item : estoque) {
+            if (item.produto->getCodigo() == codigo) return &item; 
+        }
+        return nullptr; 
+    }
 
 public:
-    Loja() {catalogo.clear();}
+    Loja() {estoque.clear();}
     ~Loja() {}
 
-    /// @brief MÉTODOS
+    // -------------- MÉTODOS DE BUSCA --------------------
     
-    // ============ verificadores ====================
-    int getSize() {return catalogo.size();}
-    bool isEmpty() {return getSize() == 0;}
-    bool isFull() {return getSize() >= MAX_TOTAL;}
-    
-    // =========== funcionalidades e procedimentos/métodos da loja  =================
+    Produto* buscarPorCodigo(int codigo) override {
+        ItemEstoque* item = buscarItemEstoque(codigo);
+        if (item != nullptr) return item->produto.get();
+        return nullptr;
+    }
 
-    /// @return "true" e o produto, se acha correspondência, e "false" e um ponteiro nulo, se acontecer o oposto.
-    /// @attention Busca apenas por código, não pelo nome. Justifica-se pelo fato de alguns comércios optarem por não usar o nome
-    // por questões de incerteza e praticidade e clareza de usar apenas códigos únicos.
-    Pbp buscaProduto(int codigo) {
-        Pbp p = {false, NULL};
-        if (isEmpty()) return p;
-
-        for (auto& produto : catalogo) {
-            Produto* pd = produto.get();
-            if (pd->getCodigo() == codigo) p = {true, pd};
+    Produto* buscarPorNome(string nome) override {
+        for (auto& item : estoque) {
+            if (item.produto->getNome() == nome) return item.produto.get();
         }
-        return p;
+        return nullptr;
     }
+    
+    // ----------------- MÉTODOS DA LOJA -----------------
 
-    /// @brief Adiciona um Produto ao catálogo da loja.
-    /// @param pd_ptr Ponteiro único para classe Produto.
-    /// @return Falso se o catálogo já está cheio ou se já há um produto com o mesmo código (códigos devem ser únicos).
-    bool adicionarProduto(unique_ptr<Produto> pd_ptr) {
-        if (isFull()) return false;
-        if (buscaProduto(pd_ptr->getCodigo()).first) return false;
+    void adicionarProduto(unique_ptr<Produto> pd, int quantidade) override {
+        if (quantidade <= 0) return;
 
-        catalogo.push_back(move(pd_ptr));
-        return true;
-    }
+        // Verifica se já existe para evitar duplicações de código de barras
+        if (buscarPorCodigo(pd->getCodigo()) != nullptr) {
+            cout << "Erro: O Produto com codigo " << pd->getCodigo() << " ja existe!=." << endl;
+            return;
+        }
 
-    /// @extends buscaProduto()
-    bool removeProduto(int codigo) {
-        Pbp res = buscaProduto(codigo);
-        if (!res.first) {return false;}
+        ItemEstoque novoItem;
+        novoItem.produto = move(pd);
+        novoItem.quantidade = quantidade;
         
-        /** @anchor O(2n)
-         * @details itera novamente pelo vetor (essa função itera 2 vezes no total por catálogo)
-         * Como continua sendo O(n) e n não tende a tamanhos grandes, o código tem dupla iteração
-         * para reaproveitamento de código */
-        for (auto it = catalogo.begin(); it != catalogo.end(); ++it) {
-            if (it->get() == res.second) {
-                catalogo.erase(it);
-                break;
-            }
+        estoque.push_back(move(novoItem));
+        cout << "[SUCESSO] Adicionados " << quantidade << " itens do produto '" << estoque.back().produto->getNome() << "'." << endl;
+    }
+
+    void venderProduto(int codigo) override {
+        ItemEstoque* item = buscarItemEstoque(codigo);
+
+        
+        if (item == nullptr) throw invalid_argument("Codigo " + to_string(codigo) + " nao existe no catalogo.\n");
+        if (item->quantidade <= 0) throw out_of_range("O produto '" + item->produto->getNome() + " está esgotado.");
+
+        item->quantidade--;
+        ganhos += item->produto->getPreco();
+        cout << "[VENDA] Vendido 1x '" << item->produto->getNome() << "' por R$" << item->produto->getPreco() << "." << endl;
+    }
+
+    void relatorioEstoque() override {
+        cout << "\n================ RELATÓRIO DE ESTOQUE ================" << endl;
+        
+        int totalLeitura = 0;
+        int totalMidia = 0;
+
+        for (auto& item : estoque) {
+            cout << "Cod: " << item.produto->getCodigo() 
+                 << " | Nome: " << item.produto->getNome() 
+                 << " | Cat: " << item.produto->getNomeCategoria() 
+                 << " | Qtd: " << item.quantidade << " unidades" << endl;
+            
+            // Somatório por Categoria
+            if (item.produto->getCategoria() == LEITURA) totalLeitura += item.quantidade;
+            if (item.produto->getCategoria() == MIDIA) totalMidia += item.quantidade;
         }
-        return res.first;
+
+        cout << "\n--- Resumo por Categoria ---" << endl;
+        cout << "Itens de Leitura (Livros): " << totalLeitura << " unidades." << endl;
+        cout << "Itens de Mídia (CDs/DVDs): " << totalMidia << " unidades." << endl;
+        cout << "Total ganho em vendas: R$" << ganhos << endl;
+        cout << "======================================================\n" << endl;
     }
-
-    /// solução @ref O(2n) 
-    bool vendeProduto(int codigo) {
-        Pbp res = buscaProduto(codigo);
-        if (!res.first) {return false;}
-
-        ganhos += res.second->getPreco();
-        removeProduto(codigo); 
-    }
-
-    // ============== Procedimento de feedbacks (Checagem das funções via terminal) ===================
-    void printBuscaProduto(int codigo) {
-        Pbp res = buscaProduto(codigo);
-
-        if (!res.first) {cout << "Produto de código" << codigo << " não encontrado." << endl << endl; return;}
-
-        cout << "Produto de código " << codigo << " encontrado:" << endl << endl;
-        cout << "Nome: " << res.second->getNome() << endl << "Preco: R$" << res.second->getPreco() << endl
-            << "Categoria: " << res.second->getCategoria() << endl << "Produto: " << res.second->getTipo() << endl << endl;
-    }
-
-    void printRemoveProduto(int codigo) {
-        if (removeProduto(codigo)) cout << "Produto de código " << codigo <<" removido com sucesso." << endl;
-        else cout << "Falha na remocao: produto de código " << codigo << " não encontrado." << endl;
-    }
-
-    void printVendeProduto(int codigo) {
-        if (vendeProduto(codigo)) cout << "Produto de código " << codigo << " vendido com sucesso." << endl;
-        else cout << "Falha na venda: produto de código " << codigo << " não encontrado." << endl;
-    }
-
-    void printAdicionarProduto(unique_ptr<Produto> pd) {
-        bool added = adicionarProduto(move(pd));
-        if (!added) cout << "Erro ao adicionar produto: Catálogo cheio ou código já existe." << endl;
-        else cout << "Produto adicionado com sucesso." << endl;
-    }
-
-    void listarProdutos() {
-
-    }
-
 };
 
 // ------------------- MAIN -------------------------
 int main() {
+    /// Verificar a @ref Interface para saber os métodos/funcionalidades da Loja.
+    Loja cudeLoja;
+
+    // Adicionar Produtos (com quantidades)
+    cudeLoja.adicionarProduto(make_unique<Livro>("O Senhor dos Aneis", 59.90, 101), 10);
+    cudeLoja.adicionarProduto(make_unique<Cd>("The Dark Side of the Moon", 29.90, 201), 5);
+    cudeLoja.adicionarProduto(make_unique<Dvd>("Matrix", 39.90, 301), 2);
+
+    // Buscas
+    cout << "\n--- Teste de Busca ---" << endl;
+    Produto* p = cudeLoja.buscarPorNome("Matrix");
+    if (p != nullptr) cout << "Encontrado pelo nome: " << p->getNome() << " (Cod: " << p->getCodigo() << ")" << endl;
+
+    // Vendas e Stock
+    
+    /// @brief Representa o "carrinho de compras" com os códigos dos produtos que o cliente deseja comprar.
+    vector<int> carrinhoDeCompras = {101, 301, 301, 301, 101, 999};
+
+    for (int i = 0; i < carrinhoDeCompras.size(); i++) {
+        int codigoAtual = carrinhoDeCompras[i];
+        
+        try {cudeLoja.venderProduto(codigoAtual);} 
+        catch (const out_of_range& erro) {cout << "[FALHA NA VENDA - ESTOQUE] " << erro.what() << endl;}
+        catch (const invalid_argument& erro) {cout << "[FALHA NA VENDA - SISTEMA] " << erro.what() << endl;}
+    }
+
+    // Relatório formatado
+    cudeLoja.relatorioEstoque();
 
     return 0;
 }
